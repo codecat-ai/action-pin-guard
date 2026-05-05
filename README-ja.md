@@ -1,6 +1,6 @@
 # action-pin-guard
 
-[English](README.md) | [中文](README-zh.md) | [日本語](README-jp.md)
+[English](README.md) | [中文](README-zh.md) | [日本語](README-ja.md)
 
 
 `action-pin-guard` は、GitHub Actions ワークフロー内の `uses:` 参照を調べる

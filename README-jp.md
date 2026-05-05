@@ -1,5 +1,8 @@
 # action-pin-guard
 
+[English](README.md) | [中文](README-zh.md) | [日本語](README-jp.md)
+
+
 `action-pin-guard` は、GitHub Actions ワークフロー内の `uses:` 参照を調べる
 読み取り専用のローカル CLI です。40 文字のコミット SHA に固定されていない
 外部 action を見つけます。

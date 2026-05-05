@@ -1,0 +1,35 @@
+name: Bug report
+description: Report incorrect scanning, output, or exit-code behavior.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Minimal workflow input
+      description: Provide the smallest workflow snippet that reproduces the issue.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: Include the command, output, and exit code.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Python version
+      placeholder: "3.11.8"
+    validations:
+      required: true

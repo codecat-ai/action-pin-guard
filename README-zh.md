@@ -1,5 +1,8 @@
 # action-pin-guard
 
+[English](README.md) | [中文](README-zh.md) | [日本語](README-jp.md)
+
+
 `action-pin-guard` 是一个只读的本地命令行工具，用来检查 GitHub Actions
 工作流中的 `uses:` 引用，并标出没有固定到 40 位提交 SHA 的第三方 action。
 

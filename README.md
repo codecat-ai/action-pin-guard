@@ -1,5 +1,8 @@
 # action-pin-guard
 
+[English](README.md) | [中文](README-zh.md) | [日本語](README-jp.md)
+
+
 `action-pin-guard` is a read-only local CLI for inventorying `uses:` references in
 GitHub Actions workflows. It highlights third-party actions that are not pinned
 to immutable 40-character commit SHAs.

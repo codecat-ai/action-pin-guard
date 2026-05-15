@@ -6,7 +6,18 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from action_pin_guard.scanner import Finding, scan_paths, summarize_findings
+from action_pin_guard.scanner import (
+    Finding,
+    is_policy_violation,
+    scan_paths,
+    summarize_findings,
+)
+
+ANNOTATION_TITLE = "Unpinned GitHub Actions reference"
+ANNOTATION_GUIDANCE = (
+    "pin external actions to a full 40-character commit SHA or explicitly allow "
+    "the owner."
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="treat docker:// action references as policy violations",
     )
+    check.add_argument(
+        "--github-annotations",
+        action="store_true",
+        help="write GitHub Actions warning annotations for policy violations to stderr",
+    )
     return parser
 
 
@@ -63,9 +79,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def run_check(args: argparse.Namespace) -> int:
     findings = scan_paths(args.paths or [Path(".github/workflows")])
+    allow_owners = {owner.lower() for owner in args.allow_owner}
     summary = summarize_findings(
         findings,
-        allow_owners={owner.lower() for owner in args.allow_owner},
+        allow_owners=allow_owners,
         allow_local=args.allow_local,
         deny_docker=args.deny_docker,
     )
@@ -78,6 +95,14 @@ def run_check(args: argparse.Namespace) -> int:
         print(json.dumps(payload, indent=2, sort_keys=False))
     else:
         print_human(findings, summary.unpinned_external)
+
+    if args.github_annotations:
+        print_github_annotations(
+            findings,
+            allow_owners=allow_owners,
+            allow_local=args.allow_local,
+            deny_docker=args.deny_docker,
+        )
 
     if summary.unpinned_external and not args.warn_only:
         return 1
@@ -99,6 +124,49 @@ def print_human(findings: Sequence[Finding], violations: int) -> None:
         print(f"{violations} unpinned external {noun} found.")
     else:
         print("No unpinned external actions found.")
+
+
+def print_github_annotations(
+    findings: Sequence[Finding],
+    *,
+    allow_owners: set[str],
+    allow_local: bool,
+    deny_docker: bool,
+) -> None:
+    for finding in findings:
+        if not is_policy_violation(
+            finding,
+            allow_owners=allow_owners,
+            allow_local=allow_local,
+            deny_docker=deny_docker,
+        ):
+            continue
+
+        properties = (
+            f"file={_escape_annotation_property(finding.file)},"
+            f"line={finding.line},"
+            f"title={_escape_annotation_property(ANNOTATION_TITLE)}"
+        )
+        message = f"{finding.uses} is {finding.classification}; {ANNOTATION_GUIDANCE}"
+        print(
+            f"::warning {properties}::{_escape_annotation_message(message)}",
+            file=sys.stderr,
+        )
+
+
+def _escape_annotation_property(value: object) -> str:
+    return _escape_annotation(str(value), escape_colon_and_comma=True)
+
+
+def _escape_annotation_message(value: object) -> str:
+    return _escape_annotation(str(value), escape_colon_and_comma=False)
+
+
+def _escape_annotation(value: str, *, escape_colon_and_comma: bool) -> str:
+    escaped = value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    if escape_colon_and_comma:
+        escaped = escaped.replace(":", "%3A").replace(",", "%2C")
+    return escaped
 
 
 if __name__ == "__main__":

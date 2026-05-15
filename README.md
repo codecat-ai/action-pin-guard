@@ -27,6 +27,8 @@ policy.
 - Returns exit code `1` for unpinned external actions unless `--warn-only` is
   used.
 - Supports stable JSON output for CI processing.
+- Can emit GitHub Actions warning annotations for policy violations while
+  keeping JSON on stdout parseable.
 - Allows local actions by default and supports owner allowlists.
 
 ## Local Setup
@@ -91,6 +93,18 @@ Fail on Docker action references:
 action-pin-guard check --deny-docker
 ```
 
+Emit GitHub Actions warning annotations to stderr:
+
+```bash
+action-pin-guard check --github-annotations
+```
+
+Keep JSON parseable on stdout while adding CI annotations:
+
+```bash
+action-pin-guard check --json --github-annotations
+```
+
 ## Configuration
 
 - `--allow-owner OWNER` lets internal or already-reviewed action owners pass
@@ -98,12 +112,27 @@ action-pin-guard check --deny-docker
 - `--warn-only` keeps the command advisory while teams migrate existing
   workflows.
 - `--deny-docker` treats `docker://` action references as violations.
+- `--github-annotations` writes one GitHub Actions `::warning` line to stderr
+  for each policy violation only. Pinned SHA refs, allowed owners, allowed local
+  actions, and allowed Docker refs are not annotated; Docker refs are annotated
+  when combined with `--deny-docker`.
+
+## GitHub Actions Example
+
+Use from a source checkout inside the workflow:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - run: python -m pip install -e ".[dev]"
+  - run: action-pin-guard check --github-annotations
+```
 
 ## Roadmap
 
 - Optional config file for shared policy.
 - More detailed remediation hints.
-- SARIF or annotations output for CI integrations.
+- SARIF output for CI integrations.
 
 ## Contributing
 

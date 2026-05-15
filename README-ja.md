@@ -23,6 +23,8 @@
 - 固定されていない外部 action が見つかると終了コード `1` を返します。
   `--warn-only` を使うと失敗扱いにしません。
 - CI で扱いやすい安定した JSON 出力を提供します。
+- ポリシー違反に対して GitHub Actions の warning annotation を出力でき、
+  stdout の JSON は解析可能なまま保てます。
 - ローカル action は既定で許可し、owner の許可リストも指定できます。
 
 ## ローカル利用
@@ -58,6 +60,8 @@ action-pin-guard check --json
 action-pin-guard check --warn-only
 action-pin-guard check --allow-owner my-org
 action-pin-guard check --deny-docker
+action-pin-guard check --github-annotations
+action-pin-guard check --json --github-annotations
 ```
 
 ## 設定
@@ -65,12 +69,27 @@ action-pin-guard check --deny-docker
 - `--allow-owner OWNER` は、内部またはレビュー済みの action owner を完全な SHA なしでも許可します。
 - `--warn-only` は、既存ワークフローの移行中にコマンドを助言モードのままにします。
 - `--deny-docker` は `docker://` action 参照を違反として扱います。
+- `--github-annotations` は、ポリシー違反ごとに GitHub Actions の `::warning`
+  を 1 行ずつ stderr に出力します。SHA に固定された参照、許可された owner、
+  許可されたローカル action、許可された Docker 参照には annotation を出しません。
+  `--deny-docker` と組み合わせると Docker 参照も対象になります。
+
+## GitHub Actions 例
+
+workflow 内ではソース checkout から利用します。
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - run: python -m pip install -e ".[dev]"
+  - run: action-pin-guard check --github-annotations
+```
 
 ## ロードマップ
 
 - 共有ポリシー用の任意設定ファイル。
 - より詳しい修正ヒント。
-- CI 連携向けの SARIF または annotation 出力。
+- CI 連携向けの SARIF 出力。
 
 ## コントリビュート
 

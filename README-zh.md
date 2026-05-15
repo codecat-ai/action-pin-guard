@@ -23,6 +23,8 @@
   `docker-action`、`reusable-workflow` 分类。
 - 发现未固定的外部 action 时返回退出码 `1`，除非使用 `--warn-only`。
 - 提供稳定的 JSON 输出，便于 CI 处理。
+- 可以为策略违规输出 GitHub Actions warning annotation，同时保持 stdout 上的
+  JSON 可解析。
 - 默认允许本地 action，并支持 owner 白名单。
 
 ## 本地使用
@@ -57,6 +59,8 @@ action-pin-guard check --json
 action-pin-guard check --warn-only
 action-pin-guard check --allow-owner my-org
 action-pin-guard check --deny-docker
+action-pin-guard check --github-annotations
+action-pin-guard check --json --github-annotations
 ```
 
 ## 配置
@@ -64,12 +68,27 @@ action-pin-guard check --deny-docker
 - `--allow-owner OWNER` 允许内部或已审查过的 action owner 即使没有完整 SHA 也通过。
 - `--warn-only` 在团队迁移现有工作流时保持提示模式，不让命令失败。
 - `--deny-docker` 把 `docker://` action 引用视为违规。
+- `--github-annotations` 只为策略违规向 stderr 写入一行 GitHub Actions
+  `::warning`。固定到 SHA 的引用、允许的 owner、允许的本地 action、允许的
+  Docker 引用不会产生 annotation；与 `--deny-docker` 一起使用时 Docker 引用会
+  被标记。
+
+## GitHub Actions 示例
+
+在 workflow 中从源码 checkout 使用：
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - run: python -m pip install -e ".[dev]"
+  - run: action-pin-guard check --github-annotations
+```
 
 ## 路线图
 
 - 用于共享策略的可选配置文件。
 - 更详细的修复建议。
-- 面向 CI 集成的 SARIF 或 annotation 输出。
+- 面向 CI 集成的 SARIF 输出。
 
 ## 贡献
 

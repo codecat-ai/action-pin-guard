@@ -136,7 +136,7 @@ def summarize_findings(
     violations = sum(
         1
         for finding in findings
-        if _is_violation(
+        if is_policy_violation(
             finding,
             allow_owners=allow_owners,
             allow_local=allow_local,
@@ -223,7 +223,7 @@ def _split_action_ref(uses: str) -> tuple[str | None, str | None, str | None]:
     return owner, repo, ref
 
 
-def _is_violation(
+def is_policy_violation(
     finding: Finding,
     *,
     allow_owners: set[str],

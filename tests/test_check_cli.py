@@ -142,3 +142,88 @@ jobs:
     payload = json.loads(capsys.readouterr().out)
     assert payload["findings"][0]["classification"] == "reusable-workflow"
     assert payload["findings"][0]["job"] == "call"
+
+
+def test_github_annotations_are_emitted_to_stderr_for_violations_only(tmp_path, capsys):
+    workflow = write_workflow(
+        tmp_path,
+        """
+name: CI
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pinned
+        uses: actions/cache@0123456789abcdef0123456789abcdef01234567
+      - name: Allowed owner
+        uses: actions/checkout@v4
+      - name: Violation
+        uses: bad-owner/bad-action@main
+      - name: Local
+        uses: ./tools/action
+      - name: Docker
+        uses: docker://alpine:3.20
+""",
+    )
+
+    exit_code = main(
+        [
+            "check",
+            "--github-annotations",
+            "--allow-owner",
+            "actions",
+            str(tmp_path),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "bad-owner/bad-action@main" in captured.out
+    assert captured.err.splitlines() == [
+        (
+            f"::warning file={workflow},line=13,"
+            "title=Unpinned GitHub Actions reference::"
+            "bad-owner/bad-action@main is branch-or-other; pin external actions "
+            "to a full 40-character commit SHA or explicitly allow the owner."
+        )
+    ]
+
+
+def test_github_annotations_keep_json_parseable_and_escape_workflow_commands(
+    tmp_path, capsys
+):
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    workflow = workflow_dir / "ci:unsafe,name%0A.yml"
+    workflow.write_text(
+        """
+name: CI
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docker
+        uses: docker://registry.example.com/ns/image:1.2%bad
+""",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["check", "--json", "--github-annotations", "--deny-docker", str(tmp_path)]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    payload = json.loads(captured.out)
+    assert payload["summary"]["docker_action"] == 1
+    assert captured.err.splitlines() == [
+        (
+            f"::warning file={tmp_path}/.github/workflows/ci%3Aunsafe%2Cname%250A.yml,"
+            "line=9,title=Unpinned GitHub Actions reference::"
+            "docker://registry.example.com/ns/image:1.2%25bad is docker-action; "
+            "pin external actions to a full 40-character commit SHA or explicitly "
+            "allow the owner."
+        )
+    ]

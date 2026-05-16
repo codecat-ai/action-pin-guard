@@ -26,6 +26,7 @@
 - ポリシー違反に対して GitHub Actions の warning annotation を出力でき、
   stdout の JSON は解析可能なまま保てます。
 - ローカル action は既定で許可し、owner の許可リストも指定できます。
+- 共有ポリシー用に任意の JSON または TOML 設定ファイルを利用できます。
 
 ## ローカル利用
 
@@ -60,6 +61,7 @@ action-pin-guard check --json
 action-pin-guard check --warn-only
 action-pin-guard check --allow-owner my-org
 action-pin-guard check --deny-docker
+action-pin-guard check --config .action-pin-guard.json
 action-pin-guard check --github-annotations
 action-pin-guard check --json --github-annotations
 ```
@@ -69,10 +71,37 @@ action-pin-guard check --json --github-annotations
 - `--allow-owner OWNER` は、内部またはレビュー済みの action owner を完全な SHA なしでも許可します。
 - `--warn-only` は、既存ワークフローの移行中にコマンドを助言モードのままにします。
 - `--deny-docker` は `docker://` action 参照を違反として扱います。
+- `--config FILE` は `.json` または `.toml` ファイルから共有ポリシーを読み込みます。
 - `--github-annotations` は、ポリシー違反ごとに GitHub Actions の `::warning`
   を 1 行ずつ stderr に出力します。SHA に固定された参照、許可された owner、
   許可されたローカル action、許可された Docker 参照には annotation を出しません。
   `--deny-docker` と組み合わせると Docker 参照も対象になります。
+
+`.action-pin-guard.json` の例：
+
+```json
+{
+  "allow_owners": ["my-org", "trusted-actions"],
+  "deny_docker": true,
+  "warn_only": false
+}
+```
+
+`.action-pin-guard.toml` の例：
+
+```toml
+allow_owners = ["my-org", "trusted-actions"]
+deny_docker = true
+warn_only = false
+```
+
+対応するキーは `allow_owners`、`deny_docker`、`warn_only` です。JSON は常に
+利用できます。TOML は Python 3.11 の `tomllib` が利用できる場合に対応します。
+ファイル拡張子でパーサーを選ぶため、設定ファイルは `.json` または `.toml` で
+終わる必要があります。
+
+コマンドラインオプションが指定された場合は、設定ファイルの値より優先されます。
+`--allow-owner` は設定内の `allow_owners` と置き換えずに結合されます。
 
 ## GitHub Actions 例
 
@@ -87,7 +116,7 @@ steps:
 
 ## ロードマップ
 
-- 共有ポリシー用の任意設定ファイル。
+- チームが移行状況を継続的に追跡するためのベースラインレポート。
 - より詳しい修正ヒント。
 - CI 連携向けの SARIF 出力。
 
@@ -100,6 +129,7 @@ issue や小さな pull request を歓迎します。スキャナーは読み取
 ```bash
 pytest
 ruff check .
+ruff format --check .
 python -m build
 ```
 

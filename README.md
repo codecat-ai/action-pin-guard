@@ -30,6 +30,7 @@ policy.
 - Can emit GitHub Actions warning annotations for policy violations while
   keeping JSON on stdout parseable.
 - Allows local actions by default and supports owner allowlists.
+- Supports optional JSON or TOML config files for shared policy.
 
 ## Local Setup
 
@@ -93,6 +94,12 @@ Fail on Docker action references:
 action-pin-guard check --deny-docker
 ```
 
+Read shared policy from a config file:
+
+```bash
+action-pin-guard check --config .action-pin-guard.json
+```
+
 Emit GitHub Actions warning annotations to stderr:
 
 ```bash
@@ -112,10 +119,37 @@ action-pin-guard check --json --github-annotations
 - `--warn-only` keeps the command advisory while teams migrate existing
   workflows.
 - `--deny-docker` treats `docker://` action references as violations.
+- `--config FILE` reads shared policy from a `.json` or `.toml` file.
 - `--github-annotations` writes one GitHub Actions `::warning` line to stderr
   for each policy violation only. Pinned SHA refs, allowed owners, allowed local
   actions, and allowed Docker refs are not annotated; Docker refs are annotated
   when combined with `--deny-docker`.
+
+Example `.action-pin-guard.json`:
+
+```json
+{
+  "allow_owners": ["my-org", "trusted-actions"],
+  "deny_docker": true,
+  "warn_only": false
+}
+```
+
+Example `.action-pin-guard.toml`:
+
+```toml
+allow_owners = ["my-org", "trusted-actions"]
+deny_docker = true
+warn_only = false
+```
+
+Supported keys are `allow_owners`, `deny_docker`, and `warn_only`. JSON is
+always supported. TOML is supported when Python 3.11's `tomllib` is available.
+File extensions select the parser, so config files must end in `.json` or
+`.toml`.
+
+CLI flags take precedence over config values when provided. `--allow-owner`
+combines with `allow_owners` from the config instead of replacing it.
 
 ## GitHub Actions Example
 
@@ -130,7 +164,7 @@ steps:
 
 ## Roadmap
 
-- Optional config file for shared policy.
+- Baseline reports to help teams track migration progress over time.
 - More detailed remediation hints.
 - SARIF output for CI integrations.
 
@@ -146,6 +180,7 @@ verified with tests and CI before merging.
 ```bash
 pytest
 ruff check .
+ruff format --check .
 python -m build
 ```
 

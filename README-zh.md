@@ -26,6 +26,7 @@
 - 可以为策略违规输出 GitHub Actions warning annotation，同时保持 stdout 上的
   JSON 可解析。
 - 默认允许本地 action，并支持 owner 白名单。
+- 支持可选的 JSON 或 TOML 配置文件，用于共享策略。
 
 ## 本地使用
 
@@ -59,6 +60,7 @@ action-pin-guard check --json
 action-pin-guard check --warn-only
 action-pin-guard check --allow-owner my-org
 action-pin-guard check --deny-docker
+action-pin-guard check --config .action-pin-guard.json
 action-pin-guard check --github-annotations
 action-pin-guard check --json --github-annotations
 ```
@@ -68,10 +70,36 @@ action-pin-guard check --json --github-annotations
 - `--allow-owner OWNER` 允许内部或已审查过的 action owner 即使没有完整 SHA 也通过。
 - `--warn-only` 在团队迁移现有工作流时保持提示模式，不让命令失败。
 - `--deny-docker` 把 `docker://` action 引用视为违规。
+- `--config FILE` 从 `.json` 或 `.toml` 文件读取共享策略。
 - `--github-annotations` 只为策略违规向 stderr 写入一行 GitHub Actions
   `::warning`。固定到 SHA 的引用、允许的 owner、允许的本地 action、允许的
   Docker 引用不会产生 annotation；与 `--deny-docker` 一起使用时 Docker 引用会
   被标记。
+
+`.action-pin-guard.json` 示例：
+
+```json
+{
+  "allow_owners": ["my-org", "trusted-actions"],
+  "deny_docker": true,
+  "warn_only": false
+}
+```
+
+`.action-pin-guard.toml` 示例：
+
+```toml
+allow_owners = ["my-org", "trusted-actions"]
+deny_docker = true
+warn_only = false
+```
+
+支持的键是 `allow_owners`、`deny_docker` 和 `warn_only`。JSON 始终可用。
+当 Python 3.11 的 `tomllib` 可用时支持 TOML。文件扩展名决定解析器，因此配置
+文件必须以 `.json` 或 `.toml` 结尾。
+
+命令行参数在提供时优先于配置文件。`--allow-owner` 会与配置中的
+`allow_owners` 合并，而不是替换它。
 
 ## GitHub Actions 示例
 
@@ -86,7 +114,7 @@ steps:
 
 ## 路线图
 
-- 用于共享策略的可选配置文件。
+- 基线报告，帮助团队持续跟踪迁移进度。
 - 更详细的修复建议。
 - 面向 CI 集成的 SARIF 输出。
 
@@ -99,6 +127,7 @@ steps:
 ```bash
 pytest
 ruff check .
+ruff format --check .
 python -m build
 ```
 

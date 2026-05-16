@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from action_pin_guard.cli import main
 
 
@@ -9,6 +11,12 @@ def write_workflow(path, text):
     workflow = workflow_dir / "ci.yml"
     workflow.write_text(text, encoding="utf-8")
     return workflow
+
+
+def write_config(path, name, text):
+    config = path / name
+    config.write_text(text, encoding="utf-8")
+    return config
 
 
 def test_tag_action_is_unpinned_and_returns_nonzero(tmp_path, capsys):
@@ -227,3 +235,171 @@ jobs:
             "allow the owner."
         )
     ]
+
+
+def test_json_config_applies_shared_policy_to_json_output_and_exit_code(
+    tmp_path, capsys
+):
+    config = write_config(
+        tmp_path,
+        ".action-pin-guard.json",
+        json.dumps(
+            {
+                "allow_owners": ["actions"],
+                "deny_docker": True,
+                "warn_only": True,
+            }
+        ),
+    )
+    write_workflow(
+        tmp_path,
+        """
+name: CI
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker://alpine:3.20
+""",
+    )
+
+    exit_code = main(["check", "--json", "--config", str(config), str(tmp_path)])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["summary"]["tag"] == 1
+    assert payload["summary"]["docker_action"] == 1
+    assert payload["summary"]["unpinned_external"] == 1
+
+
+def test_toml_config_is_supported_when_tomllib_is_available(tmp_path, capsys):
+    pytest.importorskip("tomllib")
+    config = write_config(
+        tmp_path,
+        ".action-pin-guard.toml",
+        """
+allow_owners = ["actions"]
+warn_only = true
+""",
+    )
+    write_workflow(
+        tmp_path,
+        """
+name: CI
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v4
+      - uses: bad-owner/tool@main
+""",
+    )
+
+    exit_code = main(["check", "--json", "--config", str(config), str(tmp_path)])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["summary"]["unpinned_external"] == 1
+
+
+def test_cli_flags_override_config_and_allow_owners_are_combined(tmp_path, capsys):
+    config = write_config(
+        tmp_path,
+        ".action-pin-guard.json",
+        json.dumps(
+            {
+                "allow_owners": ["actions"],
+                "deny_docker": False,
+                "warn_only": True,
+            }
+        ),
+    )
+    write_workflow(
+        tmp_path,
+        """
+name: CI
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: internal-org/build@main
+      - uses: docker://alpine:3.20
+""",
+    )
+
+    exit_code = main(
+        [
+            "check",
+            "--json",
+            "--config",
+            str(config),
+            "--allow-owner",
+            "internal-org",
+            "--deny-docker",
+            str(tmp_path),
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["summary"]["unpinned_external"] == 1
+
+
+@pytest.mark.parametrize(
+    ("name", "contents", "message"),
+    [
+        (".action-pin-guard.yaml", "warn_only: true", "unsupported config extension"),
+        (".action-pin-guard.json", "{", "invalid JSON config"),
+        (
+            ".action-pin-guard.json",
+            json.dumps({"allow_owners": ["actions"], "extra": True}),
+            "unknown config key",
+        ),
+        (
+            ".action-pin-guard.json",
+            json.dumps({"allow_owners": "actions"}),
+            "allow_owners must be a list of strings",
+        ),
+        (
+            ".action-pin-guard.json",
+            json.dumps({"deny_docker": "yes"}),
+            "deny_docker must be a boolean",
+        ),
+    ],
+)
+def test_invalid_config_exits_2_with_clear_stderr(
+    tmp_path, capsys, name, contents, message
+):
+    config = write_config(tmp_path, name, contents)
+
+    with pytest.raises(SystemExit) as exc:
+        main(["check", "--config", str(config), str(tmp_path)])
+
+    assert exc.value.code == 2
+    assert message in capsys.readouterr().err
+
+
+def test_missing_config_exits_2_with_clear_stderr(tmp_path, capsys):
+    missing_config = tmp_path / ".action-pin-guard.json"
+
+    with pytest.raises(SystemExit) as exc:
+        main(["check", "--config", str(missing_config), str(tmp_path)])
+
+    assert exc.value.code == 2
+    assert "config file not found" in capsys.readouterr().err
+
+
+def test_malformed_toml_config_exits_2_with_clear_stderr(tmp_path, capsys):
+    pytest.importorskip("tomllib")
+    config = write_config(tmp_path, ".action-pin-guard.toml", "warn_only =")
+
+    with pytest.raises(SystemExit) as exc:
+        main(["check", "--config", str(config), str(tmp_path)])
+
+    assert exc.value.code == 2
+    assert "invalid TOML config" in capsys.readouterr().err

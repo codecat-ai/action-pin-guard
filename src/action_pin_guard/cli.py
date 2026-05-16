@@ -6,6 +6,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from action_pin_guard.config import ConfigError, PolicyConfig, load_policy_config
 from action_pin_guard.scanner import (
     Finding,
     is_policy_violation,
@@ -38,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument(
         "--warn-only",
         action="store_true",
+        default=None,
         help="report findings without returning a failing exit code",
     )
     check.add_argument(
@@ -56,7 +58,13 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument(
         "--deny-docker",
         action="store_true",
+        default=None,
         help="treat docker:// action references as policy violations",
+    )
+    check.add_argument(
+        "--config",
+        type=Path,
+        help="read shared policy from a .json or .toml config file",
     )
     check.add_argument(
         "--github-annotations",
@@ -71,20 +79,31 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "check":
-        return run_check(args)
+        try:
+            return run_check(args)
+        except ConfigError as exc:
+            parser.error(str(exc))
 
     parser.error("unknown command")
     return 2
 
 
 def run_check(args: argparse.Namespace) -> int:
+    config = load_policy_config(args.config) if args.config else PolicyConfig()
+    allow_owners = {
+        owner.lower() for owner in [*config.allow_owners, *args.allow_owner]
+    }
+    deny_docker = (
+        args.deny_docker if args.deny_docker is not None else bool(config.deny_docker)
+    )
+    warn_only = args.warn_only if args.warn_only is not None else bool(config.warn_only)
+
     findings = scan_paths(args.paths or [Path(".github/workflows")])
-    allow_owners = {owner.lower() for owner in args.allow_owner}
     summary = summarize_findings(
         findings,
         allow_owners=allow_owners,
         allow_local=args.allow_local,
-        deny_docker=args.deny_docker,
+        deny_docker=deny_docker,
     )
 
     if args.json:
@@ -101,10 +120,10 @@ def run_check(args: argparse.Namespace) -> int:
             findings,
             allow_owners=allow_owners,
             allow_local=args.allow_local,
-            deny_docker=args.deny_docker,
+            deny_docker=deny_docker,
         )
 
-    if summary.unpinned_external and not args.warn_only:
+    if summary.unpinned_external and not warn_only:
         return 1
     return 0
 
